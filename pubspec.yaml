@@ -1,0 +1,17 @@
+name: 'lemming'
+version: 0.0.1
+description: A shape library for data visualisations.
+author: Mariana Marasoiu <mariana.marasoiu@gmail.com>
+homepage: http://mariana.marasoiu.com
+
+environment:
+  sdk: '>=1.0.0 <2.0.0'
+
+dependencies:
+  browser: '>=0.10.0 <0.11.0'
+  dart_to_js_script_rewriter: '^0.1.0'
+  vector_math: '^2.0.0'
+  statemachine: '^1.2.0'
+
+transformers:
+- dart_to_js_script_rewriter
