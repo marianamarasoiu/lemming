@@ -60,7 +60,7 @@ class VisStateMachine {
   State _rotating;
 
   /// The currently active shape.
-  shapes.Shape _shape;
+  shapes.Rectangle _shape;
 
   /// Used when moving and resizing shapes.
   double mousePositionXAtActionStart;
@@ -174,20 +174,19 @@ class VisStateMachine {
       ..onStream(root.onMouseMove, (MouseEvent moveEvent) {
           print('_resizing.onStream(onMouseMove)');
           if (mousePositionXAtActionStart == null || mousePositionYAtActionStart == null) {
-            var angleInRads = (_shape.rotationAngle + offset) * PI / 180.0;
-            mousePositionXAtActionStart = moveEvent.client.x * cos(angleInRads) - moveEvent.client.y * sin(angleInRads);
-            mousePositionYAtActionStart = moveEvent.client.x * sin(angleInRads) + moveEvent.client.y * cos(angleInRads);
+            mousePositionXAtActionStart = moveEvent.client.x * cos(_shape.rotationAngleRad) - moveEvent.client.y * sin(_shape.rotationAngleRad);
+            mousePositionYAtActionStart = moveEvent.client.x * sin(_shape.rotationAngleRad) + moveEvent.client.y * cos(_shape.rotationAngleRad);
             controlHandle = moveEvent.target;
             _shape.prepareModification();
           }
-          var angleInRads = (_shape.rotationAngle + offset) * PI / 180.0;
-          double mousePositionX = moveEvent.client.x * cos(angleInRads) - moveEvent.client.y * sin(angleInRads);
-          double mousePositionY = moveEvent.client.x * sin(angleInRads) + moveEvent.client.y * cos(angleInRads);
+          double mousePositionX = moveEvent.client.x * cos(_shape.rotationAngleRad) - moveEvent.client.y * sin(_shape.rotationAngleRad);
+          double mousePositionY = moveEvent.client.x * sin(_shape.rotationAngleRad) + moveEvent.client.y * cos(_shape.rotationAngleRad);
           double movementX = mousePositionX - mousePositionXAtActionStart;
           double movementY = mousePositionY - mousePositionYAtActionStart;
 
           print(movementX);
           print(movementY);
+          print(_shape.bounds);
 
           if (controlHandle.classes.contains('top-left')) {
             double tentativeWidth = _shape.oldWidth - movementX;
@@ -270,6 +269,7 @@ class VisStateMachine {
           // TODO: find an explanation for this
           var angle = -atan2(-moveEvent.offset.x + _shape.rotationPointAbsoluteX, -moveEvent.offset.y + _shape.rotationPointAbsoluteY);
           print(angle * (180.0 / PI));
+          print(_shape.bounds);
           _shape.rotationAngle = angle * (180.0 / PI);
           showManipulationControls(_shape);
         })
@@ -290,9 +290,8 @@ class VisStateMachine {
             _shape.prepareModification();
             _moving.enter();
           } else if (element.dataset.containsKey(resizeControlDataKey)) { // Click on a resize control, enter resize.
-          var angleInRads = (_shape.rotationAngle + offset) * PI / 180.0;
-            mousePositionXAtActionStart = downEvent.client.x * cos(angleInRads) - downEvent.client.y * sin(angleInRads);
-            mousePositionYAtActionStart = downEvent.client.x * sin(angleInRads) + downEvent.client.y * cos(angleInRads);
+            mousePositionXAtActionStart = downEvent.client.x * cos(_shape.rotationAngleRad) - downEvent.client.y * sin(_shape.rotationAngleRad);
+            mousePositionYAtActionStart = downEvent.client.x * sin(_shape.rotationAngleRad) + downEvent.client.y * cos(_shape.rotationAngleRad);
             controlHandle = element;
             _shape.prepareModification();
             _resizing.enter();

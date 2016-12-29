@@ -1,15 +1,14 @@
 library shapes;
 
+import 'dart:math' as math;
 import 'dart:svg';
 
 abstract class Shape {
-  double x;
-  double y;
-  double width;
-  double height;
+  Bounds get bounds;
   double rotationPointX;
   double rotationPointY;
   double rotationAngle;
+  double rotationAngleRad;
   double get rotationPointAbsoluteX;
   double get rotationPointAbsoluteY;
   double get centerX;
@@ -25,6 +24,31 @@ abstract class Shape {
   prepareModification();
   commitModification();
   cancelModification();
+}
+
+class Bounds {
+  double topLeftX;
+  double topLeftY;
+  double topRightX;
+  double topRightY;
+  double bottomLeftX;
+  double bottomLeftY;
+  double bottomRightX;
+  double bottomRightY;
+
+  factory Bounds.fromTwoPoints(double topLeftX, double topLeftY, double bottomRightX, double bottomRightY) {
+    return new Bounds._internal(topLeftX, topLeftY, bottomRightX, topLeftY, topLeftX, bottomRightY, bottomRightX, bottomRightY);
+  }
+  factory Bounds.fromPointAndSize(double topLeftX, double topLeftY, double width, double height) {
+    return new Bounds._internal(topLeftX, topLeftY, topLeftX + width, topLeftY, topLeftX, topLeftY + height, topLeftX + width, topLeftY + height);
+  }
+  Bounds._internal(this.topLeftX, this.topLeftY, this.topRightX, this.topRightY, this.bottomLeftX, this.bottomLeftY, this.bottomRightX, this.bottomRightY);
+
+  bool operator ==(o) => o is Bounds && o.topLeftX == topLeftX && o.topLeftY == topLeftY && o.bottomRightX == bottomRightX && o.bottomRightY == bottomRightY;
+
+  String toString() {
+    return 'topLeft: <$topLeftX, $topLeftY>\ntopRight: <$topRightX, $topRightY>\nbottomLeft: <$bottomLeftX, $bottomLeftY>\nbottomRight: <$bottomRightX, $bottomRightY>\n';
+  } 
 }
 
 class Rectangle implements Shape {
@@ -55,6 +79,9 @@ class Rectangle implements Shape {
   /// Reference to the SVG element that represents this rectangle.
   RectElement _rect;
 
+  /// Reference to the SVG element that represents the bounding box of this rectangle.
+  RectElement _bounds;
+
   /// Reference to the parent of this rectangle.
   SvgElement _parent;
 
@@ -78,6 +105,13 @@ class Rectangle implements Shape {
       ..attributes['height'] = '${_height}px'
       ..attributes['transform'] = 'rotate($_rotationAngle, $_rotationPointX, $_rotationPointY)'
       ..style.setProperty('fill', _fillColour);
+    Bounds b = bounds;
+    _bounds = new RectElement()
+      ..attributes['x'] = '${b.topLeftX}px'
+      ..attributes['y'] = '${b.topLeftY}px'
+      ..attributes['width'] = '${b.topRightX - b.topLeftX}px'
+      ..attributes['height'] = '${b.bottomLeftY - b.topLeftY}px'
+      ..style.setProperty('fill', '#eeeeee');
   }
 
   double get x => _x;
@@ -126,8 +160,24 @@ class Rectangle implements Shape {
      _updateTransformAttribute();
   }
 
+  double get rotationAngleRad => rotationAngle * math.PI / 180.0;
+  set rotationAngleRad(double value) {
+    _rotationAngle = value * 180.0 / math.PI;
+    _updateTransformAttribute();
+  }
+
   _updateTransformAttribute() {
     _rect.attributes['transform'] = 'rotate($rotationAngle, ${centerX + rotationPointX}, ${centerY + rotationPointY})';
+    _updateBounds();
+  }
+
+  _updateBounds() {
+    Bounds b = bounds;
+    _bounds
+      ..attributes['x'] = '${b.topLeftX}px'
+      ..attributes['y'] = '${b.topLeftY}px'
+      ..attributes['width'] = '${b.topRightX - b.topLeftX}px'
+      ..attributes['height'] = '${b.bottomLeftY - b.topLeftY}px';
   }
 
   double get rotationPointAbsoluteX => centerX + rotationPointX;
@@ -146,13 +196,31 @@ class Rectangle implements Shape {
     _rect.attributes['fill'] = '${_fillColour}px';
   }
 
+  Bounds get bounds {
+    double topLeftX = centerX + (-width / 2) * math.cos(rotationAngleRad) - (-height / 2) * math.sin(rotationAngleRad);
+    double topLeftY = centerY + (-height / 2) * math.cos(rotationAngleRad) + (-width / 2) * math.sin(rotationAngleRad);
+    double topRightX = topLeftX + math.cos(rotationAngleRad) * width;
+    double topRightY = topLeftY + math.sin(rotationAngleRad) * width;
+    double bottomLeftX = topLeftX - math.sin(rotationAngleRad) * height;
+    double bottomLeftY = topLeftY + math.cos(rotationAngleRad) * height;
+    double bottomRightX = topLeftX + math.cos(rotationAngleRad) * width - math.sin(rotationAngleRad) * height;
+    double bottomRightY = topLeftY + math.sin(rotationAngleRad) * width + math.cos(rotationAngleRad) * height;
+    double boundsTopLeftX = [topLeftX, topRightX, bottomLeftX, bottomRightX].reduce(math.min);
+    double boundsTopLeftY = [topLeftY, topRightY, bottomLeftY, bottomRightY].reduce(math.min);
+    double boundsBottomRightX = [topLeftX, topRightX, bottomLeftX, bottomRightX].reduce(math.max);
+    double boundsBottomRightY = [topLeftY, topRightY, bottomLeftY, bottomRightY].reduce(math.max);
+    return new Bounds.fromTwoPoints(boundsTopLeftX, boundsTopLeftY, boundsBottomRightX, boundsBottomRightY);
+  }
+
   RectElement get svgElement => _rect;
 
   attachToParent(SvgElement parent) {
     if (_parent != null || _parent != parent) {
       _rect.remove();
+      _bounds.remove();
     }
     _parent = parent;
+    parent.append(_bounds);
     parent.append(_rect);
   }
 
