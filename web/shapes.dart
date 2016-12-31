@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'dart:svg';
 
 abstract class Shape {
-  Bounds get bounds;
+  BoundingBox get bounds;
   double rotationPointX;
   double rotationPointY;
   double rotationAngle;
@@ -26,29 +26,28 @@ abstract class Shape {
   cancelModification();
 }
 
-class Bounds {
-  double topLeftX;
-  double topLeftY;
-  double topRightX;
-  double topRightY;
-  double bottomLeftX;
-  double bottomLeftY;
-  double bottomRightX;
-  double bottomRightY;
+class BoundingBox {
+  double top;
+  double bottom;
+  double left;
+  double right;
+  double get width => right - left;
+  double get height => bottom - top;
 
-  factory Bounds.fromTwoPoints(double topLeftX, double topLeftY, double bottomRightX, double bottomRightY) {
-    return new Bounds._internal(topLeftX, topLeftY, bottomRightX, topLeftY, topLeftX, bottomRightY, bottomRightX, bottomRightY);
+  // TODO: Change the order of the constructor parameters and update everywhere an object is created.
+  factory BoundingBox.fromTwoPoints(double left, double top, double right, double bottom) {
+    return new BoundingBox._internal(left, top, right, bottom);
   }
-  factory Bounds.fromPointAndSize(double topLeftX, double topLeftY, double width, double height) {
-    return new Bounds._internal(topLeftX, topLeftY, topLeftX + width, topLeftY, topLeftX, topLeftY + height, topLeftX + width, topLeftY + height);
+  factory BoundingBox.fromPointAndSize(double left, double top, double width, double height) {
+    return new BoundingBox._internal(left, top, left + width, top + height);
   }
-  Bounds._internal(this.topLeftX, this.topLeftY, this.topRightX, this.topRightY, this.bottomLeftX, this.bottomLeftY, this.bottomRightX, this.bottomRightY);
+  BoundingBox._internal(this.left, this.top, this.right, this.bottom);
 
-  bool operator ==(o) => o is Bounds && o.topLeftX == topLeftX && o.topLeftY == topLeftY && o.bottomRightX == bottomRightX && o.bottomRightY == bottomRightY;
+  bool operator ==(o) => o is BoundingBox && o.top == top && o.left == left && o.bottom == bottom && o.right == right;
 
   String toString() {
-    return 'topLeft: <$topLeftX, $topLeftY>\ntopRight: <$topRightX, $topRightY>\nbottomLeft: <$bottomLeftX, $bottomLeftY>\nbottomRight: <$bottomRightX, $bottomRightY>\n';
-  } 
+    return 'top: $top, bottom: $bottom, left: $left, right: $right';
+  }
 }
 
 class Rectangle implements Shape {
@@ -105,12 +104,12 @@ class Rectangle implements Shape {
       ..attributes['height'] = '${_height}px'
       ..attributes['transform'] = 'rotate($_rotationAngle, $_rotationPointX, $_rotationPointY)'
       ..style.setProperty('fill', _fillColour);
-    Bounds b = bounds;
+    BoundingBox b = bounds;
     _bounds = new RectElement()
-      ..attributes['x'] = '${b.topLeftX}px'
-      ..attributes['y'] = '${b.topLeftY}px'
-      ..attributes['width'] = '${b.topRightX - b.topLeftX}px'
-      ..attributes['height'] = '${b.bottomLeftY - b.topLeftY}px'
+      ..attributes['x'] = '${b.left}px'
+      ..attributes['y'] = '${b.top}px'
+      ..attributes['width'] = '${b.width}px'
+      ..attributes['height'] = '${b.height}px'
       ..style.setProperty('fill', '#eeeeee');
   }
 
@@ -172,12 +171,12 @@ class Rectangle implements Shape {
   }
 
   _updateBounds() {
-    Bounds b = bounds;
+    BoundingBox b = bounds;
     _bounds
-      ..attributes['x'] = '${b.topLeftX}px'
-      ..attributes['y'] = '${b.topLeftY}px'
-      ..attributes['width'] = '${b.topRightX - b.topLeftX}px'
-      ..attributes['height'] = '${b.bottomLeftY - b.topLeftY}px';
+      ..attributes['x'] = '${b.left}px'
+      ..attributes['y'] = '${b.top}px'
+      ..attributes['width'] = '${b.width}px'
+      ..attributes['height'] = '${b.height}px';
   }
 
   double get rotationPointAbsoluteX => centerX + rotationPointX;
@@ -196,7 +195,7 @@ class Rectangle implements Shape {
     _rect.attributes['fill'] = '${_fillColour}px';
   }
 
-  Bounds get bounds {
+  BoundingBox get bounds {
     double topLeftX = centerX + (-width / 2) * math.cos(rotationAngleRad) - (-height / 2) * math.sin(rotationAngleRad);
     double topLeftY = centerY + (-height / 2) * math.cos(rotationAngleRad) + (-width / 2) * math.sin(rotationAngleRad);
     double topRightX = topLeftX + math.cos(rotationAngleRad) * width;
@@ -209,7 +208,7 @@ class Rectangle implements Shape {
     double boundsTopLeftY = [topLeftY, topRightY, bottomLeftY, bottomRightY].reduce(math.min);
     double boundsBottomRightX = [topLeftX, topRightX, bottomLeftX, bottomRightX].reduce(math.max);
     double boundsBottomRightY = [topLeftY, topRightY, bottomLeftY, bottomRightY].reduce(math.max);
-    return new Bounds.fromTwoPoints(boundsTopLeftX, boundsTopLeftY, boundsBottomRightX, boundsBottomRightY);
+    return new BoundingBox.fromTwoPoints(boundsTopLeftX, boundsTopLeftY, boundsBottomRightX, boundsBottomRightY);
   }
 
   RectElement get svgElement => _rect;
