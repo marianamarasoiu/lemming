@@ -3,14 +3,14 @@ library shapes;
 import 'dart:math' as math;
 import 'dart:svg';
 
+import 'package:vector_math/vector_math.dart';
+
+import 'transforms.dart';
+import 'utils.dart';
+
 abstract class Shape {
-  BoundingBox get bounds;
-  double rotationPointX;
-  double rotationPointY;
-  double rotationAngle;
-  double rotationAngleRad;
-  double get rotationPointAbsoluteX;
-  double get rotationPointAbsoluteY;
+  double get rotationAngleDeg;
+  double get rotationAngleRad;
   double get centerX;
   double get centerY;
   double get oldX;
@@ -24,30 +24,6 @@ abstract class Shape {
   prepareModification();
   commitModification();
   cancelModification();
-}
-
-class BoundingBox {
-  double top;
-  double bottom;
-  double left;
-  double right;
-  double get width => right - left;
-  double get height => bottom - top;
-
-  // TODO: Change the order of the constructor parameters and update everywhere an object is created.
-  factory BoundingBox.fromTwoPoints(double left, double top, double right, double bottom) {
-    return new BoundingBox._internal(left, top, right, bottom);
-  }
-  factory BoundingBox.fromPointAndSize(double left, double top, double width, double height) {
-    return new BoundingBox._internal(left, top, left + width, top + height);
-  }
-  BoundingBox._internal(this.left, this.top, this.right, this.bottom);
-
-  bool operator ==(o) => o is BoundingBox && o.top == top && o.left == left && o.bottom == bottom && o.right == right;
-
-  String toString() {
-    return 'top: $top, bottom: $bottom, left: $left, right: $right';
-  }
 }
 
 class Rectangle implements Shape {
@@ -67,11 +43,6 @@ class Rectangle implements Shape {
   double _height;
   double __height;
 
-  /// The rotation points relative to the center;
-  double _rotationPointX;
-  double _rotationPointY;
-  double _rotationAngle;
-
   /// The colour of the rectangle.
   String _fillColour;
 
@@ -84,6 +55,9 @@ class Rectangle implements Shape {
   /// Reference to the parent of this rectangle.
   SvgElement _parent;
 
+  /// The list of transformations.
+  SvgTransformList _transformList;
+
   factory Rectangle({
       double x: 100.0,
       double y: 100.0,
@@ -94,22 +68,23 @@ class Rectangle implements Shape {
   }
 
   Rectangle._internal(this._x, this._y, this._width, this._height, this._fillColour) {
-    _rotationPointX = 0.0;
-    _rotationPointY = 0.0;
-    _rotationAngle = 0.0;
+    __x = _x;
+    __y = _y;
+    __width = _width;
+    __height = _height;
     _rect = new RectElement()
       ..attributes['x'] = '${_x}px'
       ..attributes['y'] = '${_y}px'
       ..attributes['width'] = '${_width}px'
       ..attributes['height'] = '${_height}px'
-      ..attributes['transform'] = 'rotate($_rotationAngle, $_rotationPointX, $_rotationPointY)'
       ..style.setProperty('fill', _fillColour);
-    BoundingBox b = bounds;
+    _transformList = new SvgTransformList(_rect);
+    
     _bounds = new RectElement()
-      ..attributes['x'] = '${b.left}px'
-      ..attributes['y'] = '${b.top}px'
-      ..attributes['width'] = '${b.width}px'
-      ..attributes['height'] = '${b.height}px'
+      ..attributes['x'] = '${_x}px'
+      ..attributes['y'] = '${_y}px'
+      ..attributes['width'] = '${_width}px'
+      ..attributes['height'] = '${_height}px'
       ..style.setProperty('fill', '#eeeeee');
   }
 
@@ -117,99 +92,56 @@ class Rectangle implements Shape {
   set x(double value) {
     _x = value;
     _rect.attributes['x'] = '${_x}px';
-    _updateTransformAttribute();
   }
 
   double get y => _y;
   set y(double value) {
     _y = value;
     _rect.attributes['y'] = '${_y}px';
-    _updateTransformAttribute();
   }
 
   double get width => _width;
   set width(double value) {
     _width = value;
     _rect.attributes['width'] = '${_width}px';
-    _updateTransformAttribute();
   }
 
   double get height => _height;
   set height(double value) {
     _height = value;
     _rect.attributes['height'] = '${_height}px';
-    _updateTransformAttribute();
   }
 
-  double get rotationPointX => _rotationPointX;
-  set rotationPointX(double value) {
-     _rotationPointX = value;
-     _updateTransformAttribute();
-  }
+  double get rotationAngleRad => transformList.isNotEmpty && transformList.getItem(0) is SvgTransformRotate ? (transformList.getItem(0) as SvgTransformRotate).angleRad : 0.0;
+  double get rotationAngleDeg => transformList.isNotEmpty && transformList.getItem(0) is SvgTransformRotate ? (transformList.getItem(0) as SvgTransformRotate).angleDeg : 0.0;
 
-  double get rotationPointY => _rotationPointY;
-  set rotationPointY(double value) {
-     _rotationPointY = value;
-     _updateTransformAttribute();
-  }
-
-  double get rotationAngle => _rotationAngle;
-  set rotationAngle(double value) {
-     _rotationAngle = value;
-     _updateTransformAttribute();
-  }
-
-  double get rotationAngleRad => rotationAngle * math.PI / 180.0;
-  set rotationAngleRad(double value) {
-    _rotationAngle = value * 180.0 / math.PI;
-    _updateTransformAttribute();
-  }
-
-  _updateTransformAttribute() {
-    _rect.attributes['transform'] = 'rotate($rotationAngle, ${centerX + rotationPointX}, ${centerY + rotationPointY})';
-    _updateBounds();
-  }
-
-  _updateBounds() {
-    BoundingBox b = bounds;
-    _bounds
-      ..attributes['x'] = '${b.left}px'
-      ..attributes['y'] = '${b.top}px'
-      ..attributes['width'] = '${b.width}px'
-      ..attributes['height'] = '${b.height}px';
-  }
-
-  double get rotationPointAbsoluteX => centerX + rotationPointX;
-  double get rotationPointAbsoluteY => centerY + rotationPointY;
-  double get centerX => _x + _width / 2;
-  double get centerY => _y + _height / 2;
+  double get centerX => bounds.left + bounds.width / 2;
+  double get centerY => bounds.top + bounds.height / 2;
 
   double get oldX => __x;
   double get oldY => __y;
   double get oldWidth => __width;
   double get oldHeight => __height;
-  
+  double get oldCenterX => __x + __width / 2;
+  double get oldCenterY => __y + __height / 2;
+
   String get fillColour => _fillColour;
   set fillColour(String value) {
     _fillColour = value;
     _rect.attributes['fill'] = '${_fillColour}px';
   }
 
-  BoundingBox get bounds {
-    double topLeftX = centerX + (-width / 2) * math.cos(rotationAngleRad) - (-height / 2) * math.sin(rotationAngleRad);
-    double topLeftY = centerY + (-height / 2) * math.cos(rotationAngleRad) + (-width / 2) * math.sin(rotationAngleRad);
-    double topRightX = topLeftX + math.cos(rotationAngleRad) * width;
-    double topRightY = topLeftY + math.sin(rotationAngleRad) * width;
-    double bottomLeftX = topLeftX - math.sin(rotationAngleRad) * height;
-    double bottomLeftY = topLeftY + math.cos(rotationAngleRad) * height;
-    double bottomRightX = topLeftX + math.cos(rotationAngleRad) * width - math.sin(rotationAngleRad) * height;
-    double bottomRightY = topLeftY + math.sin(rotationAngleRad) * width + math.cos(rotationAngleRad) * height;
-    double boundsTopLeftX = [topLeftX, topRightX, bottomLeftX, bottomRightX].reduce(math.min);
-    double boundsTopLeftY = [topLeftY, topRightY, bottomLeftY, bottomRightY].reduce(math.min);
-    double boundsBottomRightX = [topLeftX, topRightX, bottomLeftX, bottomRightX].reduce(math.max);
-    double boundsBottomRightY = [topLeftY, topRightY, bottomLeftY, bottomRightY].reduce(math.max);
-    return new BoundingBox.fromTwoPoints(boundsTopLeftX, boundsTopLeftY, boundsBottomRightX, boundsBottomRightY);
+  math.Rectangle get bounds {
+    math.Rectangle boundingRect = _rect.getBoundingClientRect();
+    math.Rectangle parentBoundingRect = getNearestParentSvg(_parent).getBoundingClientRect();
+    return new math.Rectangle(
+      boundingRect.left - parentBoundingRect.left,
+      boundingRect.top - parentBoundingRect.top,
+      boundingRect.width,
+      boundingRect.height);
   }
+
+  SvgTransformList get transformList => _transformList;
 
   RectElement get svgElement => _rect;
 
@@ -219,8 +151,19 @@ class Rectangle implements Shape {
       _bounds.remove();
     }
     _parent = parent;
+    updateBounds();
     parent.append(_bounds);
     parent.append(_rect);
+  }
+
+  updateBounds() {
+    math.Rectangle relativeBoundingRect = bounds;
+    print('x: ${relativeBoundingRect.left}, y: ${relativeBoundingRect.top}, width: ${relativeBoundingRect.width}, height: ${relativeBoundingRect.height}');
+    _bounds
+      ..attributes['x'] = '${relativeBoundingRect.left}px'
+      ..attributes['y'] = '${relativeBoundingRect.top}px'
+      ..attributes['width'] = '${relativeBoundingRect.width}px'
+      ..attributes['height'] = '${relativeBoundingRect.height}px';
   }
 
   showHighlight() {
@@ -239,10 +182,78 @@ class Rectangle implements Shape {
   }
 
   commitModification() {
-    __x = null;
-    __y = null;
-    __width = null;
-    __height = null;
+    __x = _x;
+    __y = _y;
+    __width = _width;
+    __height = _height;
+
+    // Exit here if the shape has no transforms.
+    if (transformList.length == 0) {
+      return;
+    }
+
+    bool firstTransformIsRotation = transformList.getItem(0) is SvgTransformRotate;
+
+    // Exit here if the shape has just one rotational transform.
+    if (transformList.length == 1 && firstTransformIsRotation) {
+      return;
+    }
+
+    // If the shape has a rotational transform and a translation, or just a translation,
+    // remove the translation and update the position of the shape.
+    if (transformList.length <= 2) {
+      int translateIndex = firstTransformIsRotation ? 1 : 0;
+      SvgTransform translation = transformList.getItem(translateIndex);
+      Matrix3 translationMatrix = translation.matrix;
+      Vector3 xy = translationMatrix.transform(new Vector3(x, y, 1.0));
+      x = xy.x;
+      y = xy.y;
+
+      transformList.removeItem(translateIndex);
+    } else {
+      // Otherwise, expect that the shape has a rotational transform ([R])
+      // and a scaling transform ([T][S][-T]) or just a scaling transform ([T][S][-T]).
+      int translateAwayIndex = firstTransformIsRotation ? 1 : 0;
+      int scaleIndex = firstTransformIsRotation ? 2 : 1;
+      int translateBackIndex = firstTransformIsRotation ? 3 : 2;
+      
+      Matrix3 scaleMatrix = transformList.getItem(translateAwayIndex).matrix
+        ..multiply(transformList.getItem(scaleIndex).matrix)
+        ..multiply(transformList.getItem(translateBackIndex).matrix);
+
+      Vector3 xy = scaleMatrix.transform(new Vector3(x, y, 1.0));
+      x = xy.x;
+      y = xy.y;
+      width = scaleMatrix[0] * width;
+      height = scaleMatrix[4] * height;
+
+      transformList
+        ..removeItem(translateBackIndex)
+        ..removeItem(scaleIndex)
+        ..removeItem(translateAwayIndex);
+    }
+
+    // If the first transform is a rotation, then update it to match the center of the new dimensions.
+    if (transformList.length == 1 && firstTransformIsRotation) {
+      // [Rold][T][S][-T] became [Rold] for a different set of dimensions (i.e. x, y, width, height).
+      // We want it to be [Rnew][Tr] where [Rnew] is centered on the new dimensions and
+      // Tr is the translation required to re-center it.
+      // Therefore, [Tr] = [Rnew_inv][Rold]
+      SvgTransformRotate oldRotation = transformList.getItem(0);
+      SvgTransformRotate newRotation = new SvgTransformRotate.withAngleRad(rotationAngleRad, centerX, centerY);
+
+      Matrix3 oldRotationMatrix = oldRotation.matrix;
+      Matrix3 newRotationMatrix = newRotation.matrix;
+      Matrix3 translateMatrix = newRotationMatrix;
+      translateMatrix.invert();
+      translateMatrix.multiply(oldRotationMatrix);
+
+      Vector3 xy = translateMatrix.transform(new Vector3(x, y, 1.0));
+      x = xy.x;
+      y = xy.y;
+
+      transformList.replaceItem(newRotation, 0);
+    }
   }
 
   cancelModification() {

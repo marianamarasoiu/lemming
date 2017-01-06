@@ -5,6 +5,7 @@ import 'dart:svg';
 import 'package:statemachine/statemachine.dart';
 
 import 'shapes.dart' as shapes;
+import 'transforms.dart';
 
 Map<RectElement, shapes.Rectangle> svgToShapes = {};
 
@@ -66,6 +67,7 @@ class VisStateMachine {
   double mousePositionXAtActionStart;
   double mousePositionYAtActionStart;
   SvgElement controlHandle;
+  String resizeDirection = '';
 
   /// Constructor for the shape machine.
   factory VisStateMachine({
@@ -156,9 +158,29 @@ class VisStateMachine {
             mousePositionYAtActionStart = moveEvent.client.y;
             _shape.prepareModification();
           }
-          _shape.x = _shape.oldX + moveEvent.client.x - mousePositionXAtActionStart;
-          _shape.y = _shape.oldY + moveEvent.client.y - mousePositionYAtActionStart;
+          double movementX = moveEvent.client.x - mousePositionXAtActionStart;
+          double movementY = moveEvent.client.y - mousePositionYAtActionStart;
+  
+          // If rotated, adjust the movement values, which are projections onto a rotated coordinate system.
+          // See https://drive.google.com/open?id=0B7t9zvRbqLSybXRnNkM2RlE0Unc for a visual description of the formulas.
+          if (_shape.rotationAngleRad > 0.0 || _shape.rotationAngleRad < 0.0) {
+            var r = sqrt(movementX * movementX + movementY * movementY);
+            var theta = atan2(movementY, movementX) - _shape.rotationAngleRad;
+            movementX = r * cos(theta);
+            movementY = r * sin(theta);
+          }
 
+          SvgTransform translate = new SvgTransformTranslate(movementX, movementY);
+
+          if (_shape.transformList.length == 0 || // No other transform
+             (_shape.transformList.length == 1 && _shape.transformList.getItem(0) is SvgTransformRotate)) { // There is one transform, and it's a rotation
+            _shape.transformList.appendItem(translate);
+          } else {
+            bool hasRotationTransform = _shape.transformList.getItem(0) is SvgTransformRotate;
+            _shape.transformList.replaceItem(translate, hasRotationTransform ? 1 : 0);
+          }
+
+          _shape.updateBounds();
           showManipulationControls(_shape);
         })
       ..onStream(root.onMouseUp, (MouseEvent upEvent) {
@@ -174,78 +196,58 @@ class VisStateMachine {
       ..onStream(root.onMouseMove, (MouseEvent moveEvent) {
           print('_resizing.onStream(onMouseMove)');
           if (mousePositionXAtActionStart == null || mousePositionYAtActionStart == null) {
-            mousePositionXAtActionStart = moveEvent.client.x * cos(_shape.rotationAngleRad) - moveEvent.client.y * sin(_shape.rotationAngleRad);
-            mousePositionYAtActionStart = moveEvent.client.x * sin(_shape.rotationAngleRad) + moveEvent.client.y * cos(_shape.rotationAngleRad);
+            mousePositionXAtActionStart = moveEvent.client.x;
+            mousePositionYAtActionStart = moveEvent.client.y;
             controlHandle = moveEvent.target;
             _shape.prepareModification();
           }
-          double mousePositionX = moveEvent.client.x * cos(_shape.rotationAngleRad) - moveEvent.client.y * sin(_shape.rotationAngleRad);
-          double mousePositionY = moveEvent.client.x * sin(_shape.rotationAngleRad) + moveEvent.client.y * cos(_shape.rotationAngleRad);
-          double movementX = mousePositionX - mousePositionXAtActionStart;
-          double movementY = mousePositionY - mousePositionYAtActionStart;
 
-          print(movementX);
-          print(movementY);
-          print(_shape.bounds);
-
-          if (controlHandle.classes.contains('top-left')) {
-            double tentativeWidth = _shape.oldWidth - movementX;
-            double tentativeHeight = _shape.oldHeight - movementY;
-
-            if (tentativeWidth < 0.0) {
-              movementX = movementX + tentativeWidth;
-            }
-            if (tentativeHeight < 0.0) {
-              movementY = movementY + tentativeHeight;
-            }
-
-            _shape.x = _shape.oldX + movementX;
-            _shape.y = _shape.oldY + movementY;
-            _shape.width = _shape.oldWidth - movementX;
-            _shape.height = _shape.oldHeight - movementY;
-          } else if (controlHandle.classes.contains('bottom-right')) {
-            double tentativeWidth = _shape.oldWidth + movementX;
-            double tentativeHeight = _shape.oldHeight + movementY;
-
-            if (tentativeWidth < 0.0) {
-              movementX = movementX - tentativeWidth;
-            }
-            if (tentativeHeight < 0.0) {
-              movementY = movementY - tentativeHeight;
-            }
-
-            _shape.width = _shape.oldWidth + movementX;
-            _shape.height = _shape.oldHeight + movementY;
-          } else if (controlHandle.classes.contains('top-right')) {
-            double tentativeWidth = _shape.oldWidth + movementX;
-            double tentativeHeight = _shape.oldHeight - movementY;
-
-            if (tentativeWidth < 0.0) {
-              movementX = movementX - tentativeWidth;
-            }
-            if (tentativeHeight < 0.0) {
-              movementY = movementY + tentativeHeight;
-            }
-
-            _shape.y = _shape.oldY + movementY;
-            _shape.width = _shape.oldWidth + movementX;
-            _shape.height = _shape.oldHeight - movementY;
-          } else if (controlHandle.classes.contains('bottom-left')) {
-            double tentativeWidth = _shape.oldWidth - movementX;
-            double tentativeHeight = _shape.oldHeight + movementY;
-
-            if (tentativeWidth < 0.0) {
-              movementX = movementX + tentativeWidth;
-            }
-            if (tentativeHeight < 0.0) {
-              movementY = movementY - tentativeHeight;
-            }
-
-            _shape.x = _shape.oldX + movementX;
-            _shape.width = _shape.oldWidth - movementX;
-            _shape.height = _shape.oldHeight + movementY;
+          double movementX = moveEvent.client.x - mousePositionXAtActionStart;
+          double movementY = moveEvent.client.y - mousePositionYAtActionStart;
+  
+          // If rotated, adjust the movement values, which are projections onto a rotated coordinate system.
+          // See https://drive.google.com/open?id=0B7t9zvRbqLSybXRnNkM2RlE0Unc for a visual description of the formulas.
+          if (_shape.rotationAngleRad > 0.0 || _shape.rotationAngleRad < 0.0) {
+            var r = sqrt(movementX * movementX + movementY * movementY);
+            var theta = atan2(movementY, movementX) - _shape.rotationAngleRad;
+            movementX = r * cos(theta);
+            movementY = r * sin(theta);
           }
 
+          double tx = _shape.x;
+          double ty = _shape.y;
+          double sx = (_shape.width + movementX) / _shape.width;
+          double sy = (_shape.height + movementY) / _shape.height;
+
+          if (resizeDirection.contains('left')) {
+            tx = _shape.x + _shape.width;
+            sx = (_shape.width - movementX) / _shape.width;
+          }
+
+          if (resizeDirection.contains('top')) {
+            ty = _shape.y + _shape.height;
+            sy = (_shape.height - movementY) / _shape.height;
+          }
+
+          SvgTransform translateAway = new SvgTransformTranslate(tx, ty);
+          SvgTransform scale = new SvgTransformScale(sx , sy);
+          SvgTransform translateBack = new SvgTransformTranslate(-tx, -ty);
+
+          if (_shape.transformList.length == 0 || // No other transform
+             (_shape.transformList.length == 1 && _shape.transformList.getItem(0) is SvgTransformRotate)) { // There is one transform, and it's a rotation
+            _shape.transformList
+              ..appendItem(translateAway)
+              ..appendItem(scale)
+              ..appendItem(translateBack);
+          } else {
+            bool hasRotationTransform = _shape.transformList.getItem(0) is SvgTransformRotate;
+            _shape.transformList
+              ..replaceItem(translateAway, hasRotationTransform ? 1 : 0)
+              ..replaceItem(scale, hasRotationTransform ? 2 : 1)
+              ..replaceItem(translateBack, hasRotationTransform ? 3 : 2);
+          }
+
+          _shape.updateBounds();
           showManipulationControls(_shape);
         })
       ..onStream(root.onMouseUp, (MouseEvent upEvent) {
@@ -254,6 +256,7 @@ class VisStateMachine {
           mousePositionXAtActionStart = null;
           mousePositionYAtActionStart = null;
           controlHandle = null;
+          resizeDirection = '';
           _shape.commitModification();
           _waiting.enter();
         });
@@ -263,19 +266,42 @@ class VisStateMachine {
           print('_rotating.onStream(onMouseMove)');
           if (controlHandle == null) {
             controlHandle = moveEvent.target;
+            resizeDirection = controlHandle.dataset['resizeDirection'];
             _shape.prepareModification();
           }
 
-          // TODO: find an explanation for this
-          var angle = -atan2(-moveEvent.offset.x + _shape.rotationPointAbsoluteX, -moveEvent.offset.y + _shape.rotationPointAbsoluteY);
-          print(angle * (180.0 / PI));
-          print(_shape.bounds);
-          _shape.rotationAngle = angle * (180.0 / PI);
+          // Find the angle between the current mouse position and the rotation center.
+          // See https://drive.google.com/open?0B7t9zvRbqLSyTk1pdFJOdFRRQmc for a visual description of the formulas.
+          double centerX, centerY;
+          if (_shape.transformList.length > 0 && _shape.transformList.getItem(0) is SvgTransformRotate) {
+            SvgTransformRotate oldRotate = _shape.transformList.getItem(0);
+            centerX = oldRotate.cx;
+            centerY = oldRotate.cy;
+          } else {
+            centerX = _shape.centerX;
+            centerY = _shape.centerY;
+          }
+          var angle = atan2(centerY - moveEvent.offset.y, centerX - moveEvent.offset.x) - PI / 2;
+
+          SvgTransform rotate = new SvgTransformRotate.withAngleRad(angle, centerX, centerY);
+          print(rotate);
+
+          // The rotation is always the first transformation in the list.
+          if (_shape.transformList.length == 0) {
+            _shape.transformList.appendItem(rotate);
+          } else if (_shape.transformList.getItem(0) is SvgTransformRotate) {
+            _shape.transformList.replaceItem(rotate, 0);
+          } else {
+            _shape.transformList.insertItemBefore(rotate, 0);
+          }
+
+          _shape.updateBounds();
           showManipulationControls(_shape);
         })
       ..onStream(root.onMouseUp, (MouseEvent upEvent) {
           print('_rotating.onStream(onMouseUp)');
           controlHandle = null;
+          resizeDirection = '';
           _shape.commitModification();
           _waiting.enter();
         });
@@ -290,13 +316,15 @@ class VisStateMachine {
             _shape.prepareModification();
             _moving.enter();
           } else if (element.dataset.containsKey(resizeControlDataKey)) { // Click on a resize control, enter resize.
-            mousePositionXAtActionStart = downEvent.client.x * cos(_shape.rotationAngleRad) - downEvent.client.y * sin(_shape.rotationAngleRad);
-            mousePositionYAtActionStart = downEvent.client.x * sin(_shape.rotationAngleRad) + downEvent.client.y * cos(_shape.rotationAngleRad);
+            mousePositionXAtActionStart = downEvent.client.x;
+            mousePositionYAtActionStart = downEvent.client.y;
             controlHandle = element;
+            resizeDirection = controlHandle.dataset['resizeDirection'];
             _shape.prepareModification();
             _resizing.enter();
           } else if (element.dataset.containsKey(rotateControlDataKey)) { // Click on the rotate control, enter rotate.
             controlHandle = element;
+            resizeDirection = controlHandle.dataset['resizeDirection'];
             _shape.prepareModification();
             _rotating.enter();
           }
